@@ -5,15 +5,25 @@ RGB_INCDIR=$(RGB_LIB_DISTRIBUTION)/include
 RGB_LIBDIR=$(RGB_LIB_DISTRIBUTION)/lib
 RGB_LIBRARY_NAME=rgbmatrix
 RGB_LIBRARY=$(RGB_LIBDIR)/lib$(RGB_LIBRARY_NAME).a
-LDFLAGS+=-L$(RGB_LIBDIR) -l$(RGB_LIBRARY_NAME) -lrt -lm -lpthread -lstdc++
 
-BUILD_DIR=build
-
+INCLUDES=-I$(RGB_INCDIR)
+LIBRARIES=-L$(RGB_LIBDIR)
 CFLAGS=-Wall -O3 -g -Wextra -Wno-unused-parameter
+LDFLAGS+=$(LIBRARIES) -l$(RGB_LIBRARY_NAME) -lrt -lm -lpthread -lstdc++
 
-all: $(RGB_LIBRARY)
+SOURCES=kiss_fft.c
+
+BUILD_DIR=bin
+
+all: $(RGB_LIBRARY) main generator
+
+main:
 	mkdir -p $(BUILD_DIR)
-	gcc main.c -o $(BUILD_DIR)/main -I$(RGB_INCDIR) $(LDFLAGS) $(CFLAGS)
+	gcc main.c -o $(BUILD_DIR)/main $(SOURCES) $(INCLUDES) $(LDFLAGS) $(CFLAGS)
+
+generator:
+	mkdir -p $(BUILD_DIR)
+	gcc generator.c -o $(BUILD_DIR)/generator $(CFLAGS) -lm
 
 $(RGB_LIBRARY): FORCE
 	$(MAKE) -C $(RGB_LIBDIR)
