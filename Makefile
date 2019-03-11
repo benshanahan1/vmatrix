@@ -11,7 +11,7 @@ LIBRARIES=-L$(RGB_LIBDIR)
 CFLAGS=-Wall -O3 -g -Wextra -Wno-unused-parameter
 LDFLAGS+=$(LIBRARIES) -l$(RGB_LIBRARY_NAME) -lrt -lm -lpthread -lstdc++
 
-SOURCES=kiss_fft.c
+SOURCES=kiss_fft.c kiss_fftr.c
 
 BUILD_DIR=bin
 
@@ -19,7 +19,7 @@ all: $(RGB_LIBRARY) main generator
 
 main:
 	mkdir -p $(BUILD_DIR)
-	gcc main.c -o $(BUILD_DIR)/main $(SOURCES) $(INCLUDES) $(LDFLAGS) $(CFLAGS)
+	gcc main.c -o $(BUILD_DIR)/main $(SOURCES) $(INCLUDES) $(LDFLAGS) $(CFLAGS) -g
 
 generator:
 	mkdir -p $(BUILD_DIR)
