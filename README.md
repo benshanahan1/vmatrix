@@ -10,6 +10,11 @@
 * 5V, 2A+ power supply
 * USB sound adapter
 
+## Requirements
+```bash
+sudo apt install libasound2-dev
+```
+
 ## Build
 
 Clone rpi-rgb-led-matrix library to Pi. Follow instructions to configure it properly for your hardware. If you're using the Adafruit RGB Matrix hat, you will need to modify the Makefile(s) to use that GPIO hardware description instead of the default one (see the [docs](https://github.com/hzeller/rpi-rgb-led-matrix#switch-the-pinout) for more information).
