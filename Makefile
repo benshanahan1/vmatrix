@@ -9,7 +9,7 @@ RGB_LIBRARY=$(RGB_LIBDIR)/lib$(RGB_LIBRARY_NAME).a
 INCLUDES=-I$(RGB_INCDIR)
 LIBRARIES=-L$(RGB_LIBDIR)
 CFLAGS=-Wall -O3 -g -Wextra -Wno-unused-parameter
-LDFLAGS+=$(LIBRARIES) -l$(RGB_LIBRARY_NAME) -lrt -lm -lpthread -lstdc++
+LDFLAGS+=$(LIBRARIES) -l$(RGB_LIBRARY_NAME) -lrt -lm -lpthread -lstdc++ -lasound
 
 SOURCES=kiss_fft.c kiss_fftr.c
 
