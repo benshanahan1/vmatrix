@@ -10,6 +10,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <alsa/asoundlib.h>
 
 #define US       1000000.0             // microseconds per second
 
@@ -18,16 +19,92 @@
 #define SAMP_DUR (1.0 / FS) * US       // usec, time between each sample
 #define WIN_DUR  (1.0 / REFRESH) * US  // usec, window duration
 
-int main(int argc, char **argv) {
+#define N 3000 
+#define N_NYQUIST (N / 2) + 1
+
+int main(int argc, char *argv[]) {
 	struct RGBLedMatrixOptions options;
 	struct RGBLedMatrix *matrix;
 	struct LedCanvas *offscreen_canvas;
 	int width, height;
 	int x, y, i;
 
+	/* Configure ALSA for audio! */
+
+	int err;
+	short buf[N];
+	snd_pcm_t *capture_handle;
+	snd_pcm_hw_params_t *hw_params;
+
+	if ((err = snd_pcm_open (&capture_handle, argv[1], SND_PCM_STREAM_CAPTURE, 0)) < 0) {
+		fprintf (stderr, "cannot open audio device %s (%s)\n", 
+			 argv[1],
+			 snd_strerror (err));
+		exit (1);
+	}
+
+	if ((err = snd_pcm_hw_params_malloc (&hw_params)) < 0) {
+		fprintf (stderr, "cannot allocate hardware parameter structure (%s)\n",
+			 snd_strerror (err));
+		exit (1);
+	}
+			 
+	if ((err = snd_pcm_hw_params_any (capture_handle, hw_params)) < 0) {
+		fprintf (stderr, "cannot initialize hardware parameter structure (%s)\n",
+			 snd_strerror (err));
+		exit (1);
+	}
+
+	if ((err = snd_pcm_hw_params_set_access (capture_handle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED)) < 0) {
+		fprintf (stderr, "cannot set access type (%s)\n",
+			 snd_strerror (err));
+		exit (1);
+	}
+
+	if ((err = snd_pcm_hw_params_set_format (capture_handle, hw_params, SND_PCM_FORMAT_S16_LE)) < 0) {
+		fprintf (stderr, "cannot set sample format (%s)\n",
+			 snd_strerror (err));
+		exit (1);
+	}
+
+	unsigned int rate = 44100;
+	if ((err = snd_pcm_hw_params_set_rate_near (capture_handle, hw_params, &rate, 0)) < 0) {
+		fprintf (stderr, "cannot set sample rate (%s)\n",
+			 snd_strerror (err));
+		exit (1);
+	}
+
+	/*
+	if ((err = snd_pcm_hw_params_set_channels (capture_handle, hw_params, 2)) < 0) {
+		fprintf (stderr, "cannot set channel count (%s)\n",
+			 snd_strerror (err));
+		exit (1);
+	}
+	*/
+
+
+	if ((err = snd_pcm_hw_params (capture_handle, hw_params)) < 0) {
+		fprintf (stderr, "cannot set parameters (%s)\n",
+			 snd_strerror (err));
+		exit (1);
+	}
+
+	snd_pcm_hw_params_free (hw_params);
+
+	if ((err = snd_pcm_prepare (capture_handle)) < 0) {
+		fprintf (stderr, "cannot prepare audio interface for use (%s)\n",
+			 snd_strerror (err));
+		exit (1);
+	}
+
+
+
+
+
+
+
+
 	// Compute `N`, the number of samples taken per window.
-	int N = (int) (FS / REFRESH);
-	int N_NYQUIST = (N / 2) + 1;
 	if (N <= 0) {
 		printf("[ERROR]: N must be greater than 0 (N=%d)\n", N);
 		exit(1);
@@ -62,6 +139,17 @@ int main(int argc, char **argv) {
 	for (;;) {
 		
 		/* Populate sample buffer for FFT. */
+
+		// Read from sound card.
+		if ((err = snd_pcm_readi(capture_handle, buf, N)) != N) {
+			fprintf(stderr, "read from audio device failed (%s)\n", snd_strerror(err));
+			exit(1);
+		}
+		for (int zzz = 0; zzz < N; ++zzz) {
+			in[zzz] = buf[zzz];
+		}
+
+		/*
 		for (int j = 0; j < N; ++j) {
 			if (getline(&line, &size, stdin) == -1) {
 				printf("--- NO LINE ---\n");
@@ -77,6 +165,7 @@ int main(int argc, char **argv) {
 				usleep(SAMP_DUR);
 			}
 		}
+		*/
 
 		/* Do FFT on buffered data. */
 		kiss_fftr_cfg fftr_cfg;
@@ -113,9 +202,11 @@ int main(int argc, char **argv) {
 		led_canvas_clear(offscreen_canvas);
 		for (int a = 0; a < N_NYQUIST; a++) {
 			x = a;
-			y = (int) (amplitudes[a] * 100);
+			y = (int) (amplitudes[a] / 20000);
+			// printf("%d ", y);
 			led_canvas_set_pixel(offscreen_canvas, x, y, 0xff, 0xff, 0xff);
 		}
+		// printf("\n");
 
 		/*
 		for (y = 0; y < height; ++y) {
@@ -137,6 +228,9 @@ int main(int argc, char **argv) {
 		offscreen_canvas = led_matrix_swap_on_vsync(matrix, offscreen_canvas);
 	
 	}
+
+	/* Close sound device. */
+	snd_pcm_close (capture_handle);
 
 	/* Clean up kissfft. */
 	kiss_fft_cleanup();
