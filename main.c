@@ -1,8 +1,9 @@
-/* -*- mode: c; c-basic-offset: 2; indent-tabs-mode: nil; -*-
+/** VMATRIX 
  *
- * Using the C-API of this library.
+ * Real-time audio spectrogram on an RGB LED matrix.
  *
  */
+
 #include "led-matrix-c.h"
 #include "kiss_fftr.h"
 
@@ -12,98 +13,32 @@
 #include <unistd.h>
 #include <alsa/asoundlib.h>
 
+#define AUDIO_DEVICE "hw:1"    // audio device to read from
+
+#define MATRIX_ROWS 32         // matrix default row count
+#define MATRIX_COLS 64         // matrix default column count
+
 #define AUDIO_FS 44100         // Hz, audio sampling rate
 #define N 3000 
 #define N_NYQUIST (N / 2) + 1
 
+
 int main(int argc, char *argv[]) {
+
 	struct RGBLedMatrixOptions options;
 	struct RGBLedMatrix *matrix;
 	struct LedCanvas *offscreen_canvas;
 	int width, height;
 	int x, y;
 
-	char *device = "hw:1";
-
-	/* Configure ALSA for audio! */
-
-	int err;
-	short buf[N];
-	snd_pcm_t *capture_handle;
-	snd_pcm_hw_params_t *hw_params;
-
-	if ((err = snd_pcm_open (&capture_handle, device, SND_PCM_STREAM_CAPTURE, 0)) < 0) {
-		fprintf (stderr, "cannot open audio device %s (%s)\n", 
-			 device,
-			 snd_strerror (err));
-		exit (1);
-	}
-
-	if ((err = snd_pcm_hw_params_malloc (&hw_params)) < 0) {
-		fprintf (stderr, "cannot allocate hardware parameter structure (%s)\n",
-			 snd_strerror (err));
-		exit (1);
-	}
-			 
-	if ((err = snd_pcm_hw_params_any (capture_handle, hw_params)) < 0) {
-		fprintf (stderr, "cannot initialize hardware parameter structure (%s)\n",
-			 snd_strerror (err));
-		exit (1);
-	}
-
-	if ((err = snd_pcm_hw_params_set_access (capture_handle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED)) < 0) {
-		fprintf (stderr, "cannot set access type (%s)\n",
-			 snd_strerror (err));
-		exit (1);
-	}
-
-	if ((err = snd_pcm_hw_params_set_format (capture_handle, hw_params, SND_PCM_FORMAT_S16_LE)) < 0) {
-		fprintf (stderr, "cannot set sample format (%s)\n",
-			 snd_strerror (err));
-		exit (1);
-	}
-
-	unsigned int rate = AUDIO_FS;
-	if ((err = snd_pcm_hw_params_set_rate_near (capture_handle, hw_params, &rate, 0)) < 0) {
-		fprintf (stderr, "cannot set sample rate (%s)\n",
-			 snd_strerror (err));
-		exit (1);
-	}
-
-	/*
-	if ((err = snd_pcm_hw_params_set_channels (capture_handle, hw_params, 2)) < 0) {
-		fprintf (stderr, "cannot set channel count (%s)\n",
-			 snd_strerror (err));
-		exit (1);
-	}
-	*/
-
-	if ((err = snd_pcm_hw_params (capture_handle, hw_params)) < 0) {
-		fprintf (stderr, "cannot set parameters (%s)\n",
-			 snd_strerror (err));
-		exit (1);
-	}
-
-	snd_pcm_hw_params_free (hw_params);
-
-	if ((err = snd_pcm_prepare (capture_handle)) < 0) {
-		fprintf (stderr, "cannot prepare audio interface for use (%s)\n",
-			 snd_strerror (err));
-		exit (1);
-	}
-
-	// Compute `N`, the number of samples taken per window.
-	if (N <= 0) {
-		printf("[ERROR]: N must be greater than 0 (N=%d)\n", N);
-		exit(1);
-	}
+	char *device = AUDIO_DEVICE;
 
 	kiss_fft_scalar in[N];
 	kiss_fft_cpx out[N_NYQUIST];
 
 	memset(&options, 0, sizeof(options));
-	options.rows = 32;
-	options.cols = 64;
+	options.rows = MATRIX_ROWS;
+	options.cols = MATRIX_COLS;
 	options.chain_length = 1;
 
 	/* This supports all the led commandline options. Try --led-help */
@@ -111,14 +46,76 @@ int main(int argc, char *argv[]) {
 	if (matrix == NULL)
 		return 1;
 
+	/* Configure ALSA for audio! */
+
+	int err;
+	short buf[N];
+	unsigned int rate = AUDIO_FS;
+	snd_pcm_t *capture_handle;
+	snd_pcm_hw_params_t *hw_params;
+
+	if ((err = snd_pcm_open (&capture_handle, device, SND_PCM_STREAM_CAPTURE, 0)) < 0) {
+		fprintf (stderr, "cannot open audio device %s (%s)\n", device, snd_strerror (err));
+		exit (1);
+	}
+
+	if ((err = snd_pcm_hw_params_malloc (&hw_params)) < 0) {
+		fprintf (stderr, "cannot allocate hardware parameter structure (%s)\n", snd_strerror (err));
+		exit (1);
+	}
+			 
+	if ((err = snd_pcm_hw_params_any (capture_handle, hw_params)) < 0) {
+		fprintf (stderr, "cannot initialize hardware parameter structure (%s)\n", snd_strerror (err));
+		exit (1);
+	}
+
+	if ((err = snd_pcm_hw_params_set_access (capture_handle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED)) < 0) {
+		fprintf (stderr, "cannot set access type (%s)\n", snd_strerror (err));
+		exit (1);
+	}
+
+	if ((err = snd_pcm_hw_params_set_format (capture_handle, hw_params, SND_PCM_FORMAT_S16_LE)) < 0) {
+		fprintf (stderr, "cannot set sample format (%s)\n", snd_strerror (err));
+		exit (1);
+	}
+
+	if ((err = snd_pcm_hw_params_set_rate_near (capture_handle, hw_params, &rate, 0)) < 0) {
+		fprintf (stderr, "cannot set sample rate (%s)\n", snd_strerror (err));
+		exit (1);
+	}
+
+	/*
+	if ((err = snd_pcm_hw_params_set_channels (capture_handle, hw_params, 2)) < 0) {
+		fprintf (stderr, "cannot set channel count (%s)\n", snd_strerror (err));
+		exit (1);
+	}
+	*/
+
+	if ((err = snd_pcm_hw_params (capture_handle, hw_params)) < 0) {
+		fprintf (stderr, "cannot set parameters (%s)\n", snd_strerror (err));
+		exit (1);
+	}
+
+	snd_pcm_hw_params_free (hw_params);
+
+	if ((err = snd_pcm_prepare (capture_handle)) < 0) {
+		fprintf (stderr, "cannot prepare audio interface for use (%s)\n", snd_strerror (err));
+		exit (1);
+	}
+
 	/* We use double-buffering: we have two buffers for the RGB matrix
 	 * that we swap on each update. 
 	 */
 	offscreen_canvas = led_matrix_create_offscreen_canvas(matrix);
 
 	led_canvas_get_size(offscreen_canvas, &width, &height);
-	fprintf(stderr, "Size: %dx%d. Hardware gpio mapping: %s\n",
-					width, height, options.hardware_mapping);
+	fprintf(stderr, "Size: %dx%d. Hardware gpio mapping: %s\n", width, height, options.hardware_mapping);
+
+	kiss_fftr_cfg fftr_cfg;
+	if ((fftr_cfg = kiss_fftr_alloc(N, 0, NULL, NULL)) == NULL) {
+		printf("Failed to allocate memory for FFT.\n");
+		exit(1);
+	}
 
 	/* FFT + RGB update loop. */
 	for (;;) {
@@ -128,19 +125,10 @@ int main(int argc, char *argv[]) {
 			fprintf(stderr, "read from audio device failed (%s)\n", snd_strerror(err));
 			exit(1);
 		}
-		for (int zzz = 0; zzz < N; ++zzz) {
-			in[zzz] = (kiss_fft_scalar) buf[zzz];
-		}
+		for (int g = 0; g < N; ++g) in[g] = (kiss_fft_scalar) buf[g];
 
 		/* Do FFT on buffered data. */
-		kiss_fftr_cfg fftr_cfg;
-		if ((fftr_cfg = kiss_fftr_alloc(N, 0, NULL, NULL)) != NULL) {
-			kiss_fftr(fftr_cfg, in, out);  // do FFT
-			free(fftr_cfg);
-		} else {
-			printf("Out of memory?\n");
-			exit(1);
-		}
+		kiss_fftr(fftr_cfg, in, out);
 
 		/* Compute amplitude of frequency components. */
 		float amplitudes[N_NYQUIST];
@@ -151,15 +139,12 @@ int main(int argc, char *argv[]) {
 		/* Update matrix display. */
 		led_canvas_clear(offscreen_canvas);
 		for (int a = 0; a < N_NYQUIST; a++) {
-			x = a;
 			y = (height - 1) - (int) (amplitudes[a] / AUDIO_FS);
 			
-			if (y < 0) {
-				y = 0;
-			}
+			if (y < 0) y = 0;
 
 			for (int aa = height - 1; aa >= y; --aa) {
-				led_canvas_set_pixel(offscreen_canvas, x, aa, 0xff, aa * 7, aa * 7);
+				led_canvas_set_pixel(offscreen_canvas, a, aa, 0xff, aa * 7, aa * 7);
 			}
 		}
 
@@ -176,6 +161,7 @@ int main(int argc, char *argv[]) {
 	snd_pcm_close (capture_handle);
 
 	/* Clean up kissfft. */
+	free(fftr_cfg);			
 	kiss_fft_cleanup();
 
 	/* Make sure to always call led_matrix_delete() in the end to reset the
