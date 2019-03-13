@@ -27,7 +27,8 @@ int main(int argc, char *argv[]) {
 	struct RGBLedMatrix *matrix;
 	struct LedCanvas *offscreen_canvas;
 	int width, height;
-	int x, y, i;
+	int x, y;
+	//int x, y, i;
 
 	/* Configure ALSA for audio! */
 
@@ -113,8 +114,8 @@ int main(int argc, char *argv[]) {
 	kiss_fft_scalar in[N];
 	kiss_fft_cpx out[N_NYQUIST];
 
-	char *line = NULL;
-	size_t size;
+	//char *line = NULL;
+	//size_t size;
 	
 	memset(&options, 0, sizeof(options));
 	options.rows = 32;
@@ -202,9 +203,16 @@ int main(int argc, char *argv[]) {
 		led_canvas_clear(offscreen_canvas);
 		for (int a = 0; a < N_NYQUIST; a++) {
 			x = a;
-			y = (int) (amplitudes[a] / 20000);
+			y = (height - 1) - (int) (amplitudes[a] / 44100);
+			
+			if (y < 0) {
+				y = 0;
+			}
+
 			// printf("%d ", y);
-			led_canvas_set_pixel(offscreen_canvas, x, y, 0xff, 0xff, 0xff);
+			for (int aa = height - 1; aa >= y; --aa) {
+				led_canvas_set_pixel(offscreen_canvas, x, aa, 0xff, aa * 7, aa * 7);
+			}
 		}
 		// printf("\n");
 
