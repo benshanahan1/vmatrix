@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <alsa/asoundlib.h>
+#include <signal.h>
 
 #define AUDIO_DEVICE "hw:1"    // audio device to read from
 
@@ -19,19 +20,26 @@
 #define MATRIX_COLS 64         // matrix default column count
 
 #define AUDIO_FS 44100         // Hz, audio sampling rate
-#define N 3000 
+#define N 750 
 #define N_NYQUIST (N / 2) + 1
 
+/* Define global variables. */
+struct RGBLedMatrixOptions options;
+struct RGBLedMatrix *matrix;
+struct LedCanvas *canvas;
+int width, height;
+snd_pcm_t *capture_handle;
+snd_pcm_hw_params_t *hw_params;
+kiss_fftr_cfg fftr_cfg;
 
-void histogram(struct LedCanvas *canvas, float *amplitudes, int w, int h);
-
+void histogram(float *amplitudes);
+void sigint_handler(int signo);
+void clean_up();
 
 int main(int argc, char *argv[]) {
 
-	struct RGBLedMatrixOptions options;
-	struct RGBLedMatrix *matrix;
-	struct LedCanvas *offscreen_canvas;
-	int width, height;
+	// Install SIGINT handler.
+	signal(SIGINT, sigint_handler);
 
 	char *device = AUDIO_DEVICE;
 
@@ -53,8 +61,6 @@ int main(int argc, char *argv[]) {
 	int err;
 	short buf[N];
 	unsigned int rate = AUDIO_FS;
-	snd_pcm_t *capture_handle;
-	snd_pcm_hw_params_t *hw_params;
 
 	err = snd_pcm_open(&capture_handle, device, SND_PCM_STREAM_CAPTURE, 0);
 	if (err < 0) {
@@ -120,13 +126,12 @@ int main(int argc, char *argv[]) {
 	/* We use double-buffering: we have two buffers for the RGB matrix
 	 * that we swap on each update. 
 	 */
-	offscreen_canvas = led_matrix_create_offscreen_canvas(matrix);
+	canvas = led_matrix_create_offscreen_canvas(matrix);
 
-	led_canvas_get_size(offscreen_canvas, &width, &height);
+	led_canvas_get_size(canvas, &width, &height);
 	fprintf(stderr, "Size: %dx%d. Hardware gpio mapping: %s\n",
 			width, height, options.hardware_mapping);
 
-	kiss_fftr_cfg fftr_cfg;
 	if ((fftr_cfg = kiss_fftr_alloc(N, 0, NULL, NULL)) == NULL) {
 		printf("Failed to allocate memory for FFT.\n");
 		exit(1);
@@ -154,46 +159,56 @@ int main(int argc, char *argv[]) {
 		}
 
 		/* Update matrix display. */
-		led_canvas_clear(offscreen_canvas);
-		histogram(offscreen_canvas, amplitudes, width, height);
+		led_canvas_clear(canvas);
+		histogram(amplitudes);
 
 		/* Now, we swap the canvas. We give swap_on_vsync the buffer we
 		 * just have drawn into, and wait until the next vsync happens.
 		 * we get back the unused buffer to which we'll draw in the next
 		 * iteration.
 		 */
-		offscreen_canvas = led_matrix_swap_on_vsync(matrix,
-				offscreen_canvas);
+		canvas = led_matrix_swap_on_vsync(matrix,
+				canvas);
 	
 	}
 
-	/* Close sound device. */
-	snd_pcm_close (capture_handle);
-
-	/* Clean up kissfft. */
-	free(fftr_cfg);			
-	kiss_fft_cleanup();
-
-	/* Make sure to always call led_matrix_delete() in the end to reset the
-	 * display. Installing signal handlers for defined exit is a good idea.
-	 */
-	led_matrix_delete(matrix);
-
+	clean_up();
 	return 0;
 
 }
 
+/** Clean up at the end of the process. */
+void clean_up() {
+	// Close sound device.
+	snd_pcm_close(capture_handle);
+
+	// Clean up kissfft.
+	free(fftr_cfg);			
+	kiss_fft_cleanup();
+
+	// Reset matrix display.
+	led_matrix_delete(matrix);
+
+	printf("Goodbye.\n");
+}
+
+/** Handle SIGINT, i.e. CTRL+C. */
+void sigint_handler(int signo) {
+	printf("Caught SIGINT. Cleaning up...\n");
+	clean_up();
+}
+
 
 /** A basic spectrogram histogram visualization. */
-void histogram(struct LedCanvas *canvas, float *amplitudes, int w, int h) {
+void histogram(float *amplitudes) {
 	int x, y;
 
 	for (int a = 0; a < N_NYQUIST; a++) {
-		y = (h - 1) - (int) (amplitudes[a] / AUDIO_FS);
+		y = (height - 1) - (int) (amplitudes[a] / AUDIO_FS);
 	
 		if (y < 0) y = 0;
 
-		for (int aa = h - 1; aa >= y; --aa) {
+		for (int aa = height - 1; aa >= y; --aa) {
 			led_canvas_set_pixel(canvas, a, aa, 0xff, aa*7, aa*7);
 		}
 	}
