@@ -23,13 +23,15 @@
 #define N_NYQUIST (N / 2) + 1
 
 
+void histogram(struct LedCanvas *canvas, float *amplitudes, int w, int h);
+
+
 int main(int argc, char *argv[]) {
 
 	struct RGBLedMatrixOptions options;
 	struct RGBLedMatrix *matrix;
 	struct LedCanvas *offscreen_canvas;
 	int width, height;
-	int x, y;
 
 	char *device = AUDIO_DEVICE;
 
@@ -153,16 +155,7 @@ int main(int argc, char *argv[]) {
 
 		/* Update matrix display. */
 		led_canvas_clear(offscreen_canvas);
-		for (int a = 0; a < N_NYQUIST; a++) {
-			y = (height - 1) - (int) (amplitudes[a] / AUDIO_FS);
-			
-			if (y < 0) y = 0;
-
-			for (int aa = height - 1; aa >= y; --aa) {
-				led_canvas_set_pixel(offscreen_canvas, a, aa,
-						0xff, aa * 7, aa * 7);
-			}
-		}
+		histogram(offscreen_canvas, amplitudes, width, height);
 
 		/* Now, we swap the canvas. We give swap_on_vsync the buffer we
 		 * just have drawn into, and wait until the next vsync happens.
@@ -188,4 +181,20 @@ int main(int argc, char *argv[]) {
 
 	return 0;
 
+}
+
+
+/** A basic spectrogram histogram visualization. */
+void histogram(struct LedCanvas *canvas, float *amplitudes, int w, int h) {
+	int x, y;
+
+	for (int a = 0; a < N_NYQUIST; a++) {
+		y = (h - 1) - (int) (amplitudes[a] / AUDIO_FS);
+	
+		if (y < 0) y = 0;
+
+		for (int aa = h - 1; aa >= y; --aa) {
+			led_canvas_set_pixel(canvas, a, aa, 0xff, aa*7, aa*7);
+		}
+	}
 }
