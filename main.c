@@ -54,53 +54,65 @@ int main(int argc, char *argv[]) {
 	snd_pcm_t *capture_handle;
 	snd_pcm_hw_params_t *hw_params;
 
-	if ((err = snd_pcm_open (&capture_handle, device, SND_PCM_STREAM_CAPTURE, 0)) < 0) {
-		fprintf (stderr, "cannot open audio device %s (%s)\n", device, snd_strerror (err));
-		exit (1);
+	err = snd_pcm_open(&capture_handle, device, SND_PCM_STREAM_CAPTURE, 0);
+	if (err < 0) {
+		fprintf(stderr, "cannot open audio device %s (%s)\n", device,
+				snd_strerror (err));
+		exit(1);
 	}
 
-	if ((err = snd_pcm_hw_params_malloc (&hw_params)) < 0) {
-		fprintf (stderr, "cannot allocate hardware parameter structure (%s)\n", snd_strerror (err));
-		exit (1);
-	}
-			 
-	if ((err = snd_pcm_hw_params_any (capture_handle, hw_params)) < 0) {
-		fprintf (stderr, "cannot initialize hardware parameter structure (%s)\n", snd_strerror (err));
-		exit (1);
+	err = snd_pcm_hw_params_malloc(&hw_params);
+	if (err < 0) {
+		fprintf(stderr, "cannot allocate hw parameter struct (%s)\n",
+				snd_strerror(err));
+		exit(1);
 	}
 
-	if ((err = snd_pcm_hw_params_set_access (capture_handle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED)) < 0) {
-		fprintf (stderr, "cannot set access type (%s)\n", snd_strerror (err));
-		exit (1);
+	err = snd_pcm_hw_params_any(capture_handle, hw_params);		 
+	if (err < 0) {
+		fprintf(stderr, "cannot initialize hw parameter struct (%s)\n",
+				snd_strerror(err));
+		exit(1);
 	}
 
-	if ((err = snd_pcm_hw_params_set_format (capture_handle, hw_params, SND_PCM_FORMAT_S16_LE)) < 0) {
-		fprintf (stderr, "cannot set sample format (%s)\n", snd_strerror (err));
-		exit (1);
+	err = snd_pcm_hw_params_set_access(capture_handle, hw_params,
+			SND_PCM_ACCESS_RW_INTERLEAVED);
+	if (err < 0) {
+		fprintf(stderr, "cannot set access type (%s)\n",
+				snd_strerror(err));
+		exit(1);
+	}
+	
+	err = snd_pcm_hw_params_set_format(capture_handle, hw_params,
+			SND_PCM_FORMAT_S16_LE);
+	if (err < 0) {
+		fprintf(stderr, "cannot set sample format (%s)\n",
+				snd_strerror (err));
+		exit(1);
 	}
 
-	if ((err = snd_pcm_hw_params_set_rate_near (capture_handle, hw_params, &rate, 0)) < 0) {
-		fprintf (stderr, "cannot set sample rate (%s)\n", snd_strerror (err));
-		exit (1);
+	err = snd_pcm_hw_params_set_rate_near(capture_handle, hw_params,
+			&rate, 0);
+	if (err < 0) {
+		fprintf(stderr, "cannot set sample rate (%s)\n",
+				snd_strerror(err));
+		exit(1);
 	}
 
-	/*
-	if ((err = snd_pcm_hw_params_set_channels (capture_handle, hw_params, 2)) < 0) {
-		fprintf (stderr, "cannot set channel count (%s)\n", snd_strerror (err));
-		exit (1);
-	}
-	*/
-
-	if ((err = snd_pcm_hw_params (capture_handle, hw_params)) < 0) {
-		fprintf (stderr, "cannot set parameters (%s)\n", snd_strerror (err));
-		exit (1);
+	err = snd_pcm_hw_params (capture_handle, hw_params);
+	if (err < 0) {
+		fprintf(stderr, "cannot set parameters (%s)\n",
+				snd_strerror(err));
+		exit(1);
 	}
 
 	snd_pcm_hw_params_free (hw_params);
 
-	if ((err = snd_pcm_prepare (capture_handle)) < 0) {
-		fprintf (stderr, "cannot prepare audio interface for use (%s)\n", snd_strerror (err));
-		exit (1);
+	err = snd_pcm_prepare (capture_handle);
+	if (err < 0) {
+		fprintf(stderr, "cannot prepare audio interface (%s)\n",
+				snd_strerror(err));
+		exit(1);
 	}
 
 	/* We use double-buffering: we have two buffers for the RGB matrix
@@ -109,7 +121,8 @@ int main(int argc, char *argv[]) {
 	offscreen_canvas = led_matrix_create_offscreen_canvas(matrix);
 
 	led_canvas_get_size(offscreen_canvas, &width, &height);
-	fprintf(stderr, "Size: %dx%d. Hardware gpio mapping: %s\n", width, height, options.hardware_mapping);
+	fprintf(stderr, "Size: %dx%d. Hardware gpio mapping: %s\n",
+			width, height, options.hardware_mapping);
 
 	kiss_fftr_cfg fftr_cfg;
 	if ((fftr_cfg = kiss_fftr_alloc(N, 0, NULL, NULL)) == NULL) {
@@ -122,7 +135,8 @@ int main(int argc, char *argv[]) {
 		
 		// Read from sound card.
 		if ((err = snd_pcm_readi(capture_handle, buf, N)) != N) {
-			fprintf(stderr, "read from audio device failed (%s)\n", snd_strerror(err));
+			fprintf(stderr, "read from audio device failed (%s)\n",
+					snd_strerror(err));
 			exit(1);
 		}
 		for (int g = 0; g < N; ++g) in[g] = (kiss_fft_scalar) buf[g];
@@ -133,7 +147,8 @@ int main(int argc, char *argv[]) {
 		/* Compute amplitude of frequency components. */
 		float amplitudes[N_NYQUIST];
 		for (int k = 0; k < N_NYQUIST; ++k) {
-			amplitudes[k] = sqrt(out[k].r*out[k].r + out[k].i*out[k].i);
+			float squared = out[k].r*out[k].r + out[k].i*out[k].i;
+			amplitudes[k] = sqrt(squared);
 		}
 
 		/* Update matrix display. */
@@ -144,7 +159,8 @@ int main(int argc, char *argv[]) {
 			if (y < 0) y = 0;
 
 			for (int aa = height - 1; aa >= y; --aa) {
-				led_canvas_set_pixel(offscreen_canvas, a, aa, 0xff, aa * 7, aa * 7);
+				led_canvas_set_pixel(offscreen_canvas, a, aa,
+						0xff, aa * 7, aa * 7);
 			}
 		}
 
@@ -153,7 +169,8 @@ int main(int argc, char *argv[]) {
 		 * we get back the unused buffer to which we'll draw in the next
 		 * iteration.
 		 */
-		offscreen_canvas = led_matrix_swap_on_vsync(matrix, offscreen_canvas);
+		offscreen_canvas = led_matrix_swap_on_vsync(matrix,
+				offscreen_canvas);
 	
 	}
 
