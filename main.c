@@ -12,13 +12,7 @@
 #include <unistd.h>
 #include <alsa/asoundlib.h>
 
-#define US       1000000.0             // microseconds per second
-
-#define REFRESH  100.0                 // Hz, matrix panel refresh rate
-#define FS       10000.0               // Hz, audio sampling rate
-#define SAMP_DUR (1.0 / FS) * US       // usec, time between each sample
-#define WIN_DUR  (1.0 / REFRESH) * US  // usec, window duration
-
+#define AUDIO_FS 44100         // Hz, audio sampling rate
 #define N 3000 
 #define N_NYQUIST (N / 2) + 1
 
@@ -28,7 +22,8 @@ int main(int argc, char *argv[]) {
 	struct LedCanvas *offscreen_canvas;
 	int width, height;
 	int x, y;
-	//int x, y, i;
+
+	char *device = "hw:1";
 
 	/* Configure ALSA for audio! */
 
@@ -37,9 +32,9 @@ int main(int argc, char *argv[]) {
 	snd_pcm_t *capture_handle;
 	snd_pcm_hw_params_t *hw_params;
 
-	if ((err = snd_pcm_open (&capture_handle, argv[1], SND_PCM_STREAM_CAPTURE, 0)) < 0) {
+	if ((err = snd_pcm_open (&capture_handle, device, SND_PCM_STREAM_CAPTURE, 0)) < 0) {
 		fprintf (stderr, "cannot open audio device %s (%s)\n", 
-			 argv[1],
+			 device,
 			 snd_strerror (err));
 		exit (1);
 	}
@@ -68,7 +63,7 @@ int main(int argc, char *argv[]) {
 		exit (1);
 	}
 
-	unsigned int rate = 44100;
+	unsigned int rate = AUDIO_FS;
 	if ((err = snd_pcm_hw_params_set_rate_near (capture_handle, hw_params, &rate, 0)) < 0) {
 		fprintf (stderr, "cannot set sample rate (%s)\n",
 			 snd_strerror (err));
@@ -82,7 +77,6 @@ int main(int argc, char *argv[]) {
 		exit (1);
 	}
 	*/
-
 
 	if ((err = snd_pcm_hw_params (capture_handle, hw_params)) < 0) {
 		fprintf (stderr, "cannot set parameters (%s)\n",
@@ -98,13 +92,6 @@ int main(int argc, char *argv[]) {
 		exit (1);
 	}
 
-
-
-
-
-
-
-
 	// Compute `N`, the number of samples taken per window.
 	if (N <= 0) {
 		printf("[ERROR]: N must be greater than 0 (N=%d)\n", N);
@@ -114,9 +101,6 @@ int main(int argc, char *argv[]) {
 	kiss_fft_scalar in[N];
 	kiss_fft_cpx out[N_NYQUIST];
 
-	//char *line = NULL;
-	//size_t size;
-	
 	memset(&options, 0, sizeof(options));
 	options.rows = 32;
 	options.cols = 64;
@@ -139,50 +123,20 @@ int main(int argc, char *argv[]) {
 	/* FFT + RGB update loop. */
 	for (;;) {
 		
-		/* Populate sample buffer for FFT. */
-
 		// Read from sound card.
 		if ((err = snd_pcm_readi(capture_handle, buf, N)) != N) {
 			fprintf(stderr, "read from audio device failed (%s)\n", snd_strerror(err));
 			exit(1);
 		}
 		for (int zzz = 0; zzz < N; ++zzz) {
-			in[zzz] = buf[zzz];
+			in[zzz] = (kiss_fft_scalar) buf[zzz];
 		}
-
-		/*
-		for (int j = 0; j < N; ++j) {
-			if (getline(&line, &size, stdin) == -1) {
-				printf("--- NO LINE ---\n");
-			} else {
-				// convert line (string) to float
-				//in[j] = (float) strtol(line, NULL, 10);
-				float SCALE = 100000; // from generator.c, this will go away
-				float sample = (float) strtol(line, NULL, 10);
-				//printf("sample: %f\n", sample / SCALE);
-				//in[j] = cos(j*2*M_PI/N);
-				//printf("input: %f\n", in[j]);
-				in[j] = sample / SCALE;
-				usleep(SAMP_DUR);
-			}
-		}
-		*/
 
 		/* Do FFT on buffered data. */
 		kiss_fftr_cfg fftr_cfg;
 		if ((fftr_cfg = kiss_fftr_alloc(N, 0, NULL, NULL)) != NULL) {
 			kiss_fftr(fftr_cfg, in, out);  // do FFT
 			free(fftr_cfg);
-
-			/*
-			for (int k = 0; k < N; k++) {
-				printf(" in[%2zu] = %+f    ", k, in[k]);
-				if (k < N / 2 + 1)
-					printf("out[%2zu] = %+f , %+f", k, out[k].r, out[k].i);
-				printf("\n");
-			}
-			*/
-
 		} else {
 			printf("Out of memory?\n");
 			exit(1);
@@ -194,39 +148,20 @@ int main(int argc, char *argv[]) {
 			amplitudes[k] = sqrt(out[k].r*out[k].r + out[k].i*out[k].i);
 		}
 
-		//for (int jj = 0; jj < N_NYQUIST; ++jj)
-		//	printf("%f, ", amplitudes[jj]);
-		//printf("\n");
-
 		/* Update matrix display. */
-		//int r, g, b;
 		led_canvas_clear(offscreen_canvas);
 		for (int a = 0; a < N_NYQUIST; a++) {
 			x = a;
-			y = (height - 1) - (int) (amplitudes[a] / 44100);
+			y = (height - 1) - (int) (amplitudes[a] / AUDIO_FS);
 			
 			if (y < 0) {
 				y = 0;
 			}
 
-			// printf("%d ", y);
 			for (int aa = height - 1; aa >= y; --aa) {
 				led_canvas_set_pixel(offscreen_canvas, x, aa, 0xff, aa * 7, aa * 7);
 			}
 		}
-		// printf("\n");
-
-		/*
-		for (y = 0; y < height; ++y) {
-			for (x = 0; x < width; ++x) {
-				r = 0;
-				g = 0;
-				b = 0;
-
-				led_canvas_set_pixel(offscreen_canvas, x, y, r, g, b);
-			}
-		}
-		*/
 
 		/* Now, we swap the canvas. We give swap_on_vsync the buffer we
 		 * just have drawn into, and wait until the next vsync happens.
