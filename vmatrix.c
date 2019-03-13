@@ -117,7 +117,7 @@ int main(int argc, char *argv[]) {
 /** Configure ALSA hardware parameters. */
 void alsa_config_hw_params() {
 	int err;
-	unsigned int rate = AUDIO_FS;
+	unsigned int rate = FS;
 
 	err = snd_pcm_hw_params_malloc(&hw_params);
 	if (err < 0) {
@@ -157,12 +157,26 @@ void alsa_config_hw_params() {
 		exit(1);
 	}
 
-	err = snd_pcm_hw_params (capture_handle, hw_params);
+	err = snd_pcm_hw_params(capture_handle, hw_params);
 	if (err < 0) {
 		fprintf(stderr, "cannot set parameters (%s)\n",
 				snd_strerror(err));
 		exit(1);
 	}
+}
+
+
+/** Return bin edge in linear-space for given values. */
+float linspace(float min, float max, int i, int n) {
+	float diff = (max - min) / (float) n;
+	return min + (diff * (float) i);
+}
+
+
+/** Return bin edge in logarithmic-space for given values. */
+float logspace(float min, float max, int i, int n) {
+	float lin = linspace(log(min), log(max), i, n);
+	return exp(lin);
 }
 
 
@@ -191,15 +205,48 @@ void sigint_handler(int signo) {
 
 /** A basic spectrogram histogram visualization. */
 void histogram(float *amplitudes) {
-	int x, y;
+	//int x
+	int y;
+	float lower_edge = 0;
 
-	for (int a = 0; a < N_NYQUIST; a++) {
-		y = (height - 1) - (int) (amplitudes[a] / AUDIO_FS);
+	//amplitudes[N_NYQUIST-1] = 10000000;
+
+	for (int bin = 0; bin < N_NYQUIST; ++bin) {
+
+		// Bin the FFT buffer logarithmically.
+		/*
+		float upper_edge = logspace(MIN_FREQ, MAX_FREQ, bin, width);
+		float data = 0;
+		for (int i = 0; i < N_NYQUIST; ++i) {
+			float f = (float) i * FREQ_RES;
+			if (f >= lower_edge && f <= upper_edge) {
+				data += amplitudes[i];
+			} else if (f > upper_edge) {
+				break;
+			}
+		}
+		*/
+
+		// Bin the FFT buffer linearly
+		float upper_edge = linspace(MIN_FREQ, MAX_FREQ, bin, width);
+		float data = 0;
+		for (int i = 0; i < N_NYQUIST; ++i) {
+			float f = (float) i * FREQ_RES;
+			if (f >= lower_edge && f <= upper_edge) {
+				data += amplitudes[i] / 10;
+			} else if (f > upper_edge) {
+				break;
+			}
+		}
+
+		y = (height - 1) - (int) (data / FS);
 	
 		if (y < 0) y = 0;
 
 		for (int aa = height - 1; aa >= y; --aa) {
-			led_canvas_set_pixel(canvas, a, aa, 0xff, aa*7, aa*7);
+			led_canvas_set_pixel(canvas, bin, aa, 0xff, aa*7, aa*7);
 		}
+
+		lower_edge = upper_edge;
 	}
 }
