@@ -10,16 +10,15 @@ INCLUDES=-I$(RGB_INCDIR)
 LIBRARIES=-L$(RGB_LIBDIR)
 CFLAGS=-Wall -O3 -g -Wextra -Wno-unused-parameter
 LDFLAGS+=$(LIBRARIES) -l$(RGB_LIBRARY_NAME) -lrt -lm -lpthread -lstdc++ -lasound
-
 SOURCES=kiss_fft.c kiss_fftr.c
 
 BUILD_DIR=bin
 
-all: $(RGB_LIBRARY) main generator
+all: $(RGB_LIBRARY) vmatrix generator
 
-main:
+vmatrix:
 	mkdir -p $(BUILD_DIR)
-	gcc main.c -o $(BUILD_DIR)/main $(SOURCES) $(INCLUDES) $(LDFLAGS) $(CFLAGS) -g
+	gcc vmatrix.c -o $(BUILD_DIR)/vmatrix $(SOURCES) $(INCLUDES) $(LDFLAGS) $(CFLAGS)
 
 generator:
 	mkdir -p $(BUILD_DIR)

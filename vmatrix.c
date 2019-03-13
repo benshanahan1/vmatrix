@@ -1,27 +1,10 @@
 /** VMATRIX 
  *
  * Real-time audio spectrogram on an RGB LED matrix.
- *
  */
 
-#include "led-matrix-c.h"
-#include "kiss_fftr.h"
+#include "vmatrix.h"
 
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <alsa/asoundlib.h>
-#include <signal.h>
-
-#define AUDIO_DEVICE "hw:1"    // audio device to read from
-
-#define MATRIX_ROWS 32         // matrix default row count
-#define MATRIX_COLS 64         // matrix default column count
-
-#define AUDIO_FS 44100         // Hz, audio sampling rate
-#define N 750 
-#define N_NYQUIST (N / 2) + 1
 
 /* Define global variables. */
 struct RGBLedMatrixOptions options;
@@ -32,9 +15,6 @@ snd_pcm_t *capture_handle;
 snd_pcm_hw_params_t *hw_params;
 kiss_fftr_cfg fftr_cfg;
 
-void histogram(float *amplitudes);
-void sigint_handler(int signo);
-void clean_up();
 
 int main(int argc, char *argv[]) {
 
@@ -57,10 +37,8 @@ int main(int argc, char *argv[]) {
 		return 1;
 
 	/* Configure ALSA for audio! */
-
 	int err;
 	short buf[N];
-	unsigned int rate = AUDIO_FS;
 
 	err = snd_pcm_open(&capture_handle, device, SND_PCM_STREAM_CAPTURE, 0);
 	if (err < 0) {
@@ -68,51 +46,9 @@ int main(int argc, char *argv[]) {
 				snd_strerror (err));
 		exit(1);
 	}
-
-	err = snd_pcm_hw_params_malloc(&hw_params);
-	if (err < 0) {
-		fprintf(stderr, "cannot allocate hw parameter struct (%s)\n",
-				snd_strerror(err));
-		exit(1);
-	}
-
-	err = snd_pcm_hw_params_any(capture_handle, hw_params);		 
-	if (err < 0) {
-		fprintf(stderr, "cannot initialize hw parameter struct (%s)\n",
-				snd_strerror(err));
-		exit(1);
-	}
-
-	err = snd_pcm_hw_params_set_access(capture_handle, hw_params,
-			SND_PCM_ACCESS_RW_INTERLEAVED);
-	if (err < 0) {
-		fprintf(stderr, "cannot set access type (%s)\n",
-				snd_strerror(err));
-		exit(1);
-	}
 	
-	err = snd_pcm_hw_params_set_format(capture_handle, hw_params,
-			SND_PCM_FORMAT_S16_LE);
-	if (err < 0) {
-		fprintf(stderr, "cannot set sample format (%s)\n",
-				snd_strerror (err));
-		exit(1);
-	}
-
-	err = snd_pcm_hw_params_set_rate_near(capture_handle, hw_params,
-			&rate, 0);
-	if (err < 0) {
-		fprintf(stderr, "cannot set sample rate (%s)\n",
-				snd_strerror(err));
-		exit(1);
-	}
-
-	err = snd_pcm_hw_params (capture_handle, hw_params);
-	if (err < 0) {
-		fprintf(stderr, "cannot set parameters (%s)\n",
-				snd_strerror(err));
-		exit(1);
-	}
+	// Configure ALSA hardware parameters.
+	alsa_config_hw_params();
 
 	snd_pcm_hw_params_free (hw_params);
 
@@ -177,6 +113,59 @@ int main(int argc, char *argv[]) {
 
 }
 
+
+/** Configure ALSA hardware parameters. */
+void alsa_config_hw_params() {
+	int err;
+	unsigned int rate = AUDIO_FS;
+
+	err = snd_pcm_hw_params_malloc(&hw_params);
+	if (err < 0) {
+		fprintf(stderr, "cannot allocate hw parameter struct (%s)\n",
+				snd_strerror(err));
+		exit(1);
+	}
+
+	err = snd_pcm_hw_params_any(capture_handle, hw_params);		 
+	if (err < 0) {
+		fprintf(stderr, "cannot initialize hw parameter struct (%s)\n",
+				snd_strerror(err));
+		exit(1);
+	}
+
+	err = snd_pcm_hw_params_set_access(capture_handle, hw_params,
+			SND_PCM_ACCESS_RW_INTERLEAVED);
+	if (err < 0) {
+		fprintf(stderr, "cannot set access type (%s)\n",
+				snd_strerror(err));
+		exit(1);
+	}
+	
+	err = snd_pcm_hw_params_set_format(capture_handle, hw_params,
+			SND_PCM_FORMAT_S16_LE);
+	if (err < 0) {
+		fprintf(stderr, "cannot set sample format (%s)\n",
+				snd_strerror (err));
+		exit(1);
+	}
+
+	err = snd_pcm_hw_params_set_rate_near(capture_handle, hw_params,
+			&rate, 0);
+	if (err < 0) {
+		fprintf(stderr, "cannot set sample rate (%s)\n",
+				snd_strerror(err));
+		exit(1);
+	}
+
+	err = snd_pcm_hw_params (capture_handle, hw_params);
+	if (err < 0) {
+		fprintf(stderr, "cannot set parameters (%s)\n",
+				snd_strerror(err));
+		exit(1);
+	}
+}
+
+
 /** Clean up at the end of the process. */
 void clean_up() {
 	// Close sound device.
@@ -191,6 +180,7 @@ void clean_up() {
 
 	printf("Goodbye.\n");
 }
+
 
 /** Handle SIGINT, i.e. CTRL+C. */
 void sigint_handler(int signo) {
