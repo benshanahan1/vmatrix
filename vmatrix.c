@@ -167,15 +167,15 @@ void alsa_config_hw_params() {
 
 
 /** Return bin edge in linear-space for given values. */
-float linspace(float min, float max, int i, int n) {
-	float diff = (max - min) / (float) n;
-	return min + (diff * (float) i);
+double linspace(double min, double max, int i, int n) {
+	double diff = (max - min) / (double) n;
+	return min + (diff * (double) i);
 }
 
 
 /** Return bin edge in logarithmic-space for given values. */
-float logspace(float min, float max, int i, int n) {
-	float lin = linspace(log(min), log(max), i, n);
+double logspace(double min, double max, int i, int n) {
+	double lin = linspace(log(min), log(max), i, n);
 	return exp(lin);
 }
 
@@ -207,20 +207,26 @@ void sigint_handler(int signo) {
 void histogram(float *amplitudes) {
 	//int x
 	int y;
-	float lower_edge = 0;
+	double lower_edge = 0;
 
 	//amplitudes[N_NYQUIST-1] = 10000000;
 
-	for (int bin = 0; bin < N_NYQUIST; ++bin) {
+	int w = width;
+	for (int x = 0; x < w; ++x) {
+
+		//double max_freq = (MAX_FREQ < MAX_FREQ_CAP) ?
+		//	MAX_FREQ : MAX_FREQ_CAP;
 
 		// Bin the FFT buffer logarithmically.
-		/*
-		float upper_edge = logspace(MIN_FREQ, MAX_FREQ, bin, width);
-		float data = 0;
+		/*	
+		double upper_edge = logspace(MIN_FREQ, max_freq, x, w);
+		double data = 0;
+		int ctr = 0;
 		for (int i = 0; i < N_NYQUIST; ++i) {
-			float f = (float) i * FREQ_RES;
+			double f = (double) i * FREQ_RES;
 			if (f >= lower_edge && f <= upper_edge) {
 				data += amplitudes[i];
+				ctr ++;
 			} else if (f > upper_edge) {
 				break;
 			}
@@ -228,25 +234,47 @@ void histogram(float *amplitudes) {
 		*/
 
 		// Bin the FFT buffer linearly
-		float upper_edge = linspace(MIN_FREQ, MAX_FREQ, bin, width);
-		float data = 0;
+		/*
+		double upper_edge = linspace(MIN_FREQ, max_freq, x, w);
+		double data = 0;
+		int ctr = 0;
 		for (int i = 0; i < N_NYQUIST; ++i) {
-			float f = (float) i * FREQ_RES;
+			double f = (double) i * FREQ_RES;
 			if (f >= lower_edge && f <= upper_edge) {
 				data += amplitudes[i] / 10;
+				ctr ++;
 			} else if (f > upper_edge) {
 				break;
 			}
 		}
+		*/
+
+		// Bin the FFT linearly.
+		double upper_edge = 100 + 100 * x;
+		double data = 0;
+		//int ctr = 0;
+		for (int i = 0; i < N_NYQUIST; ++i) {
+			float f = i * 12.67;  // scale so bins are distributed
+			if (f >= lower_edge && f <= upper_edge) {
+				data += amplitudes[i] / 10;
+				//ctr ++;
+			} else if (f > upper_edge) {
+				break;
+			}
+		}
+
+		//printf("%d ", ctr);
 
 		y = (height - 1) - (int) (data / FS);
 	
 		if (y < 0) y = 0;
 
 		for (int aa = height - 1; aa >= y; --aa) {
-			led_canvas_set_pixel(canvas, bin, aa, 0xff, aa*7, aa*7);
+			led_canvas_set_pixel(canvas, x, aa, 0xff, aa*7, aa*7);
 		}
 
 		lower_edge = upper_edge;
 	}
+	//printf("\n");
+
 }
