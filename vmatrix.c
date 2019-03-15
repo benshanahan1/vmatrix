@@ -148,45 +148,28 @@ float *bin_amplitudes(float *amplitudes) {
 			MAX_FREQ : MAX_FREQ_CAP;
 
 		// Bin the FFT buffer logarithmically.	
-		/*
-		double upper_edge = logspace(MIN_FREQ, max_freq, x, size);
-		for (int i = 0; i < N_NYQUIST; ++i) {
-			double f = (double) i * FREQ_RES;
-			if (f >= lower_edge && f <= upper_edge) {
-				binarr[x] += amplitudes[i] / 100;
-			} else if (f > upper_edge) {
-				break;
-			}
-		}
-		*/
-
-		// Bin the FFT buffer linearly
+		//double upper_edge = logspace(MIN_FREQ, max_freq, x, size);
+		//double index_scaling = FREQ_RES;
+		//double scaling = 100;
+	
+		// Bin FFT linearly.
 		double upper_edge = linspace(MIN_FREQ, max_freq, x, size);
+		double index_scaling = FREQ_RES;
+		double scaling = FS;
+	
+		// Bin FFT linearly (method 2).
+		//double upper_edge = 100 + 100 * x;
+		//double index_scaling = 12.67;
+		//double scaling = 10;	
+
 		for (int i = 0; i < N_NYQUIST; ++i) {
-			double f = (double) i * FREQ_RES;
+			double f = (double) i * index_scaling;
 			if (f >= lower_edge && f <= upper_edge) {
-				binarr[x] += amplitudes[i] / FS;
+				binarr[x] += amplitudes[i] / scaling;
 			} else if (f > upper_edge) {
 				break;
 			}
 		}
-
-		// Bin the FFT linearly.
-		/*
-		double upper_edge = 100 + 100 * x;
-		//int ctr = 0;
-		for (int i = 0; i < N_NYQUIST; ++i) {
-			float f = i * 12.67;  // scale so bins are distributed
-			if (f >= lower_edge && f <= upper_edge) {
-				binarr[x] += amplitudes[i] / 10;
-				//ctr ++;
-			} else if (f > upper_edge) {
-				break;
-			}
-		}
-		*/
-
-		//printf("%d ", ctr);
 
 		lower_edge = upper_edge;
 	}
@@ -211,13 +194,6 @@ double logspace(double min, double max, int i, int n) {
 }
 
 
-/** Handle SIGINT, i.e. CTRL+C. */
-void sigint_handler(int signo) {
-	printf("Caught SIGINT. Cleaning up...\n");
-	clean_up();
-}
-
-
 /** A horizontally scrolling spectrogram. */
 void scrolling_spectrogram(float *binarr) {
 	/* Shift 2D history array. Since this 2D array is actually contiguous in
@@ -236,6 +212,12 @@ void scrolling_spectrogram(float *binarr) {
 	float s_min = 0.0;
 	float s_max = 350.0;
 
+	// Since history is a contiguous 1D array (but we're using it to store
+	// 2D information) we can just incrementally step through it and we will
+	// retrieve the appropriate values for each column of the scrolling
+	// spectrogram matrix (we use the nested loops to get `x` and `y` for
+	// drawing to the canvas, but we use `ctr` to keep track of our index in
+	// `history` array).
 	int ctr = 0;
 	for (int x = width - 1; x >= 0; --x) {
 		for (int y = height - 1; y >= 0; --y) {
@@ -248,6 +230,7 @@ void scrolling_spectrogram(float *binarr) {
 			int group = (int) inverted;
 			int scale = (int) (255 * (inverted - group));
 
+			// Map `group` and `scale` to RGB colormap.
 			int r = 0, g = 0, b = 0;
 			switch (group) {
 				case 0:
@@ -355,4 +338,11 @@ void alsa_config_hw_params() {
 				snd_strerror(err));
 		exit(1);
 	}
+}
+
+
+/** Handle SIGINT, i.e. CTRL+C. */
+void sigint_handler(int signo) {
+	printf("Caught SIGINT. Cleaning up...\n");
+	clean_up();
 }
