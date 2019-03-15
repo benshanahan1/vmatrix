@@ -19,7 +19,6 @@ float *bins;
 
 
 int main(int argc, char *argv[]) {
-
 	// Install SIGINT handler.
 	signal(SIGINT, sigint_handler);
 
@@ -119,19 +118,13 @@ int main(int argc, char *argv[]) {
 
 	clean_up();
 	return 0;
-
 }
 
 
 /** Bin amplitudes from FFT. */
 float *bin_amplitudes(float *amplitudes) {
-	
-	//int x
-	//int y;
 	double lower_edge = 0;
 
-	//amplitudes[N_NYQUIST-1] = 10000000;
-	
 	/* Allocate memory for binned amplitudes array. The `fmaxf` function
 	 * finds the maximum of two floats.
 	 */
@@ -176,7 +169,6 @@ float *bin_amplitudes(float *amplitudes) {
 
 	// Return allocated pointer to binned amplitude values.
 	return binarr;
-
 }
 
 
