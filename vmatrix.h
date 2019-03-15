@@ -13,7 +13,7 @@
 #define MATRIX_ROWS 32       // matrix default row count
 #define MATRIX_COLS 64       // matrix default column count
 #define FS 44100             // Hz, audio sampling rate
-#define N 2000               // audio sample buffer size 
+#define N 1600               // audio sample buffer size 
 
 
 /* Computed definitions. */
@@ -25,9 +25,11 @@
 
 
 /* Function declarations. */
-void histogram(float *amplitudes);
 void sigint_handler(int signo);
 void clean_up();
 void alsa_config_hw_params();
 double linspace(double min, double max, int i, int n);
 double logspace(double min, double max, int i, int n);
+float *bin_amplitudes(float *amplitudes);
+void histogram(float *amplitudes);
+void scrolling_spectrogram(float *binarr);

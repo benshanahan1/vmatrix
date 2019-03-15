@@ -14,6 +14,8 @@ int width, height;
 snd_pcm_t *capture_handle;
 snd_pcm_hw_params_t *hw_params;
 kiss_fftr_cfg fftr_cfg;
+float *history;
+float *bins;
 
 
 int main(int argc, char *argv[]) {
@@ -68,8 +70,14 @@ int main(int argc, char *argv[]) {
 	fprintf(stderr, "Size: %dx%d. Hardware gpio mapping: %s\n",
 			width, height, options.hardware_mapping);
 
+	/* Allocate memory for 2-D history array. */
+	if ((history = calloc(width * height, sizeof(float))) == NULL) {
+		printf("Error allocating memory for history array.\n");
+		exit(1);
+	}
+
 	if ((fftr_cfg = kiss_fftr_alloc(N, 0, NULL, NULL)) == NULL) {
-		printf("Failed to allocate memory for FFT.\n");
+		printf("Error allocating memory for FFT.\n");
 		exit(1);
 	}
 
@@ -96,21 +104,205 @@ int main(int argc, char *argv[]) {
 
 		/* Update matrix display. */
 		led_canvas_clear(canvas);
-		histogram(amplitudes);
+		bins = bin_amplitudes(amplitudes);
+		//histogram(bins);
+		scrolling_spectrogram(bins);
 
 		/* Now, we swap the canvas. We give swap_on_vsync the buffer we
 		 * just have drawn into, and wait until the next vsync happens.
 		 * we get back the unused buffer to which we'll draw in the next
 		 * iteration.
 		 */
-		canvas = led_matrix_swap_on_vsync(matrix,
-				canvas);
-	
+		canvas = led_matrix_swap_on_vsync(matrix, canvas);
+
 	}
 
 	clean_up();
 	return 0;
 
+}
+
+
+/** Bin amplitudes from FFT. */
+float *bin_amplitudes(float *amplitudes) {
+	
+	//int x
+	//int y;
+	double lower_edge = 0;
+
+	//amplitudes[N_NYQUIST-1] = 10000000;
+	
+	/* Allocate memory for binned amplitudes array. The `fmaxf` function
+	 * finds the maximum of two floats.
+	 */
+	float *binarr;
+	if ((binarr = calloc(height, sizeof(float))) == NULL) {
+		printf("Error allocating memory for binned amplitude array.\n");
+		exit(1);
+	}
+
+	int size = height;
+	for (int x = 0; x < size; ++x) {
+
+		double max_freq = (MAX_FREQ < MAX_FREQ_CAP) ?
+			MAX_FREQ : MAX_FREQ_CAP;
+
+		// Bin the FFT buffer logarithmically.	
+		/*
+		double upper_edge = logspace(MIN_FREQ, max_freq, x, size);
+		for (int i = 0; i < N_NYQUIST; ++i) {
+			double f = (double) i * FREQ_RES;
+			if (f >= lower_edge && f <= upper_edge) {
+				binarr[x] += amplitudes[i] / 100;
+			} else if (f > upper_edge) {
+				break;
+			}
+		}
+		*/
+
+		// Bin the FFT buffer linearly
+		double upper_edge = linspace(MIN_FREQ, max_freq, x, size);
+		for (int i = 0; i < N_NYQUIST; ++i) {
+			double f = (double) i * FREQ_RES;
+			if (f >= lower_edge && f <= upper_edge) {
+				binarr[x] += amplitudes[i] / FS;
+			} else if (f > upper_edge) {
+				break;
+			}
+		}
+
+		// Bin the FFT linearly.
+		/*
+		double upper_edge = 100 + 100 * x;
+		//int ctr = 0;
+		for (int i = 0; i < N_NYQUIST; ++i) {
+			float f = i * 12.67;  // scale so bins are distributed
+			if (f >= lower_edge && f <= upper_edge) {
+				binarr[x] += amplitudes[i] / 10;
+				//ctr ++;
+			} else if (f > upper_edge) {
+				break;
+			}
+		}
+		*/
+
+		//printf("%d ", ctr);
+
+		lower_edge = upper_edge;
+	}
+
+	// Return allocated pointer to binned amplitude values.
+	return binarr;
+
+}
+
+
+/** Return bin edge in linear-space for given values. */
+double linspace(double min, double max, int i, int n) {
+	double diff = (max - min) / (double) n;
+	return min + (diff * (double) i);
+}
+
+
+/** Return bin edge in logarithmic-space for given values. */
+double logspace(double min, double max, int i, int n) {
+	double lin = linspace(log(min), log(max), i, n);
+	return exp(lin);
+}
+
+
+/** Handle SIGINT, i.e. CTRL+C. */
+void sigint_handler(int signo) {
+	printf("Caught SIGINT. Cleaning up...\n");
+	clean_up();
+}
+
+
+/** A horizontally scrolling spectrogram. */
+void scrolling_spectrogram(float *binarr) {
+	/* Shift 2D history array. Since this 2D array is actually contiguous in
+	 * memory, we can just shift all elements back by `width` (dropping the
+	 * last `width` elements). Then, we can add our new `binarr` array to
+	 * the front of the `history` array.
+	 */
+	int d = height;  // dimension that binning is over
+
+	for (int i = (width * height) - 1; i >= d; --i)
+		history[i] = history[i - d];
+
+	for (int i = 0; i < d; ++i)
+		history[i] = binarr[i];
+
+	float s_min = 0.0;
+	float s_max = 350.0;
+
+	int ctr = 0;
+	for (int x = width - 1; x >= 0; --x) {
+		for (int y = height - 1; y >= 0; --y) {
+			int bin = history[ctr];
+
+			// Normalize bin value.
+			if (bin > s_max) bin = s_max;  // cap value of bin
+			float normalized = (bin - s_min) / (s_max - s_min);
+			float inverted = ((1.0 - normalized) / 0.25);
+			int group = (int) inverted;
+			int scale = (int) (255 * (inverted - group));
+
+			int r = 0, g = 0, b = 0;
+			switch (group) {
+				case 0:
+					r = 255; b = scale; break;
+				case 1:
+					r = 255 - scale; b = 255; break;
+				case 2:
+					r = 0; b = 255; break;
+				case 3:
+					r = 0; b = 255 - scale; break;
+				case 4:
+					r = 0; b = 0; break;
+			}
+
+			led_canvas_set_pixel(canvas, x, y, r, g, b);
+			ctr ++;
+		}
+	}
+}
+
+
+/** A basic spectrogram histogram visualization. */
+void histogram(float *binarr) {
+	int y;
+
+	for (int x = 0; x < width; ++x) {
+		y = (height - 1) - (int) (binarr[x] / FS);
+	
+		if (y < 0) y = 0;
+
+		for (int aa = height - 1; aa >= y; --aa) {
+			led_canvas_set_pixel(canvas, x, aa, 0xff, aa*7, aa*7);
+		}
+
+	}
+}
+
+
+/** Clean up at the end of the process. */
+void clean_up() {
+	// Close sound device.
+	snd_pcm_close(capture_handle);
+
+	// Clean up kissfft.
+	free(fftr_cfg);			
+	kiss_fft_cleanup();
+
+	// Free allocated arrays.
+	free(history);
+	free(bins);
+
+	// Reset matrix display.
+	led_matrix_delete(matrix);
+
+	printf("Goodbye.\n");
 }
 
 
@@ -163,118 +355,4 @@ void alsa_config_hw_params() {
 				snd_strerror(err));
 		exit(1);
 	}
-}
-
-
-/** Return bin edge in linear-space for given values. */
-double linspace(double min, double max, int i, int n) {
-	double diff = (max - min) / (double) n;
-	return min + (diff * (double) i);
-}
-
-
-/** Return bin edge in logarithmic-space for given values. */
-double logspace(double min, double max, int i, int n) {
-	double lin = linspace(log(min), log(max), i, n);
-	return exp(lin);
-}
-
-
-/** Clean up at the end of the process. */
-void clean_up() {
-	// Close sound device.
-	snd_pcm_close(capture_handle);
-
-	// Clean up kissfft.
-	free(fftr_cfg);			
-	kiss_fft_cleanup();
-
-	// Reset matrix display.
-	led_matrix_delete(matrix);
-
-	printf("Goodbye.\n");
-}
-
-
-/** Handle SIGINT, i.e. CTRL+C. */
-void sigint_handler(int signo) {
-	printf("Caught SIGINT. Cleaning up...\n");
-	clean_up();
-}
-
-
-/** A basic spectrogram histogram visualization. */
-void histogram(float *amplitudes) {
-	//int x
-	int y;
-	double lower_edge = 0;
-
-	//amplitudes[N_NYQUIST-1] = 10000000;
-
-	int w = width;
-	for (int x = 0; x < w; ++x) {
-
-		//double max_freq = (MAX_FREQ < MAX_FREQ_CAP) ?
-		//	MAX_FREQ : MAX_FREQ_CAP;
-
-		// Bin the FFT buffer logarithmically.
-		/*	
-		double upper_edge = logspace(MIN_FREQ, max_freq, x, w);
-		double data = 0;
-		int ctr = 0;
-		for (int i = 0; i < N_NYQUIST; ++i) {
-			double f = (double) i * FREQ_RES;
-			if (f >= lower_edge && f <= upper_edge) {
-				data += amplitudes[i];
-				ctr ++;
-			} else if (f > upper_edge) {
-				break;
-			}
-		}
-		*/
-
-		// Bin the FFT buffer linearly
-		/*
-		double upper_edge = linspace(MIN_FREQ, max_freq, x, w);
-		double data = 0;
-		int ctr = 0;
-		for (int i = 0; i < N_NYQUIST; ++i) {
-			double f = (double) i * FREQ_RES;
-			if (f >= lower_edge && f <= upper_edge) {
-				data += amplitudes[i] / 10;
-				ctr ++;
-			} else if (f > upper_edge) {
-				break;
-			}
-		}
-		*/
-
-		// Bin the FFT linearly.
-		double upper_edge = 100 + 100 * x;
-		double data = 0;
-		//int ctr = 0;
-		for (int i = 0; i < N_NYQUIST; ++i) {
-			float f = i * 12.67;  // scale so bins are distributed
-			if (f >= lower_edge && f <= upper_edge) {
-				data += amplitudes[i] / 10;
-				//ctr ++;
-			} else if (f > upper_edge) {
-				break;
-			}
-		}
-
-		//printf("%d ", ctr);
-
-		y = (height - 1) - (int) (data / FS);
-	
-		if (y < 0) y = 0;
-
-		for (int aa = height - 1; aa >= y; --aa) {
-			led_canvas_set_pixel(canvas, x, aa, 0xff, aa*7, aa*7);
-		}
-
-		lower_edge = upper_edge;
-	}
-	//printf("\n");
-
 }
