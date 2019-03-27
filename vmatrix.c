@@ -272,21 +272,23 @@ void histogram(float *binarr, bool fill_hist) {
 	float scaling = 1.0 / 20.0;
 
 	for (int x = 0; x < width; ++x) {
-		y = (height - 1) - (int) (binarr[x] * scaling);
-		if (y < 0) y = 0;
+		y = (height) - (int) (binarr[x] * scaling);
+		if (y <= 0) y = 0;
 
-		if (fill_hist == true) {
-			for (int aa = height - 1; aa >= y; --aa) {
-				led_canvas_set_pixel(canvas, x, aa, aa, 0, aa*7);
+		if (y > 0) {
+			if (fill_hist == true) {
+				for (int aa = height; aa >= y; --aa) {
+					led_canvas_set_pixel(canvas, x, aa, aa, 0, aa*7);
+				}
+			} else {
+				led_canvas_set_pixel(canvas, x, y, 0xff, 0, 0xff);
 			}
-		} else {
-			led_canvas_set_pixel(canvas, x, y, 0xff, 0, 0xff);
 		}
 
 		// Update amplitude envelope.
 		if (y < envelope[x].y) envelope[x].y = y;
-		if (envelope[x].y >= height) envelope[x].y = height - 1;
-		if (envelope[x].counter-- <= 0) {
+		if (envelope[x].y > height) envelope[x].y = height;
+		if (envelope[x].counter-- < 0) {
 			envelope[x].y ++;
 			envelope[x].counter = ENVELOPE_CTR;
 		}
@@ -297,8 +299,8 @@ void histogram(float *binarr, bool fill_hist) {
 		//printf("%d (%d)\n", envelope[i].y, envelope[i].counter);
 		// Don't set the pixels if they are on the bottom row of the
 		// canvas (this makes things look bad).
-		if (envelope[i].y != height - 1) {
-			led_canvas_set_pixel(canvas, i, envelope[i].y, 0xcc, 0, 0x33);
+		if (envelope[i].y != height) {
+			led_canvas_set_pixel(canvas, i, envelope[i].y, 0xcc, 0, 0x66);
 		}
 	}
 }
