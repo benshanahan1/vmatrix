@@ -15,6 +15,7 @@
 #define MATRIX_COLS 64       // matrix default column count
 #define FS 44100             // Hz, audio sampling rate
 #define N 1600               // audio sample buffer size 
+#define ENVELOPE_CTR 1       // number of clicks envelope falls
 
 
 /* Computed definitions. */
@@ -23,6 +24,14 @@
 #define MIN_FREQ FREQ_RES          // freq. of lowest FFT bin
 #define MAX_FREQ FREQ_RES * (N/2)  // freq. of highest FFT bin
 #define MAX_FREQ_CAP 16000         // max freq. for visualization purposes
+
+
+/* Data structures. */
+typedef struct {
+	//int x;
+	int y;
+	int counter;  // keep track of # of iterations passed
+} PointHistory;
 
 
 /* Function declarations. */

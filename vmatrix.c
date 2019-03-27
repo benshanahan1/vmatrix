@@ -16,6 +16,7 @@ snd_pcm_hw_params_t *hw_params;
 kiss_fftr_cfg fftr_cfg;
 float *history;
 float *bins;
+PointHistory *envelope;
 
 
 int main(int argc, char *argv[]) {
@@ -72,6 +73,12 @@ int main(int argc, char *argv[]) {
 	/* Allocate memory for 2-D history array. */
 	if ((history = calloc(width * height, sizeof(float))) == NULL) {
 		printf("Error allocating memory for history array.\n");
+		exit(1);
+	}
+
+	/* Allocate array for creating amplitude envelope. */
+	if ((envelope = calloc(width, sizeof(PointHistory))) == NULL) {
+		printf("Error allocating memory for envelope array.\n");
 		exit(1);
 	}
 
@@ -266,17 +273,33 @@ void histogram(float *binarr, bool fill_hist) {
 
 	for (int x = 0; x < width; ++x) {
 		y = (height - 1) - (int) (binarr[x] * scaling);
-	
 		if (y < 0) y = 0;
 
 		if (fill_hist == true) {
 			for (int aa = height - 1; aa >= y; --aa) {
-				led_canvas_set_pixel(canvas, x, aa, aa*7, 0, aa*7);
+				led_canvas_set_pixel(canvas, x, aa, aa, 0, aa*7);
 			}
 		} else {
 			led_canvas_set_pixel(canvas, x, y, 0xff, 0, 0xff);
 		}
 
+		// Update amplitude envelope.
+		if (y < envelope[x].y) envelope[x].y = y;
+		if (envelope[x].y >= height) envelope[x].y = height - 1;
+		if (envelope[x].counter-- <= 0) {
+			envelope[x].y ++;
+			envelope[x].counter = ENVELOPE_CTR;
+		}
+	}
+
+	// Update envelope pixels on canvas.
+	for (int i = 0; i < width; ++i) {
+		//printf("%d (%d)\n", envelope[i].y, envelope[i].counter);
+		// Don't set the pixels if they are on the bottom row of the
+		// canvas (this makes things look bad).
+		if (envelope[i].y != height - 1) {
+			led_canvas_set_pixel(canvas, i, envelope[i].y, 0xcc, 0, 0x33);
+		}
 	}
 }
 
@@ -292,6 +315,7 @@ void clean_up() {
 
 	// Free allocated arrays.
 	free(history);
+	free(envelope);
 	free(bins);
 
 	// Reset matrix display.
