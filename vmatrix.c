@@ -123,7 +123,7 @@ int main(int argc, char *argv[]) {
 
 /** Bin amplitudes from FFT. */
 float *bin_amplitudes(float *amplitudes) {
-	double lower_edge = 0;
+	//double lower_edge = 0;
 
 	/* Allocate memory for binned amplitudes array. The `fmaxf` function
 	 * finds the maximum of two floats.
@@ -134,9 +134,14 @@ float *bin_amplitudes(float *amplitudes) {
 		exit(1);
 	}
 
+	float scaling = 1.0 / (FS / 3.0);
+
 	int size = height;
 	for (int x = 0; x < size; ++x) {
 
+		binarr[x] = amplitudes[x] * scaling;
+
+		/*
 		double max_freq = (MAX_FREQ < MAX_FREQ_CAP) ?
 			MAX_FREQ : MAX_FREQ_CAP;
 
@@ -146,9 +151,9 @@ float *bin_amplitudes(float *amplitudes) {
 		//double scaling = 100;
 	
 		// Bin FFT linearly.
-		double upper_edge = linspace(MIN_FREQ, max_freq, x, size);
-		double index_scaling = FREQ_RES;
-		double scaling = FS;
+		//double upper_edge = linspace(MIN_FREQ, max_freq, x, size);
+		//double index_scaling = FREQ_RES;
+		//double scaling = FS;
 	
 		// Bin FFT linearly (method 2).
 		//double upper_edge = 100 + 100 * x;
@@ -165,6 +170,7 @@ float *bin_amplitudes(float *amplitudes) {
 		}
 
 		lower_edge = upper_edge;
+		*/
 	}
 
 	// Return allocated pointer to binned amplitude values.
