@@ -104,8 +104,8 @@ int main(int argc, char *argv[]) {
 		/* Update matrix display. */
 		led_canvas_clear(canvas);
 		bins = bin_amplitudes(amplitudes);
-		//histogram(bins);
-		scrolling_spectrogram(bins);
+		histogram(bins);
+		//scrolling_spectrogram(bins);
 
 		/* Now, we swap the canvas. We give swap_on_vsync the buffer we
 		 * just have drawn into, and wait until the next vsync happens.
@@ -125,21 +125,25 @@ int main(int argc, char *argv[]) {
 float *bin_amplitudes(float *amplitudes) {
 	//double lower_edge = 0;
 
+	int size = width;
+	//int size = height;
+
 	/* Allocate memory for binned amplitudes array. The `fmaxf` function
 	 * finds the maximum of two floats.
 	 */
 	float *binarr;
-	if ((binarr = calloc(height, sizeof(float))) == NULL) {
+	if ((binarr = calloc(size, sizeof(float))) == NULL) {
 		printf("Error allocating memory for binned amplitude array.\n");
 		exit(1);
 	}
 
 	float scaling = 1.0 / (FS / 3.0);
 
-	int size = height;
 	for (int x = 0; x < size; ++x) {
 
-		binarr[x] = amplitudes[x] * scaling;
+		// First several amplitudes are too low too hear, so we offset
+		// the amplitude indexing to skip them.
+		binarr[x] = amplitudes[x + 2] * scaling;
 
 		/*
 		double max_freq = (MAX_FREQ < MAX_FREQ_CAP) ?
@@ -253,14 +257,15 @@ void scrolling_spectrogram(float *binarr) {
 /** A basic spectrogram histogram visualization. */
 void histogram(float *binarr) {
 	int y;
+	float scaling = 1.0 / 20.0;
 
 	for (int x = 0; x < width; ++x) {
-		y = (height - 1) - (int) (binarr[x] / FS);
+		y = (height - 1) - (int) (binarr[x] * scaling);
 	
 		if (y < 0) y = 0;
 
 		for (int aa = height - 1; aa >= y; --aa) {
-			led_canvas_set_pixel(canvas, x, aa, 0xff, aa*7, aa*7);
+			led_canvas_set_pixel(canvas, x, aa, aa*7, 0, aa*7);
 		}
 
 	}
