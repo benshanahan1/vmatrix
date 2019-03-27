@@ -1,6 +1,7 @@
 #include <alsa/asoundlib.h>
 #include <signal.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -31,5 +32,5 @@ void alsa_config_hw_params();
 double linspace(double min, double max, int i, int n);
 double logspace(double min, double max, int i, int n);
 float *bin_amplitudes(float *amplitudes);
-void histogram(float *amplitudes);
+void histogram(float *amplitudes, bool fill_hist);
 void scrolling_spectrogram(float *binarr);

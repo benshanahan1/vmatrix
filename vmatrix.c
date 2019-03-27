@@ -104,7 +104,9 @@ int main(int argc, char *argv[]) {
 		/* Update matrix display. */
 		led_canvas_clear(canvas);
 		bins = bin_amplitudes(amplitudes);
-		histogram(bins);
+
+		bool fill_hist = true;
+		histogram(bins, fill_hist);
 		//scrolling_spectrogram(bins);
 
 		/* Now, we swap the canvas. We give swap_on_vsync the buffer we
@@ -254,8 +256,11 @@ void scrolling_spectrogram(float *binarr) {
 }
 
 
-/** A basic spectrogram histogram visualization. */
-void histogram(float *binarr) {
+/** A basic spectrogram histogram visualization.
+ *
+ * If `fill_hist` is true, fill each histogram bin vertically.
+ */
+void histogram(float *binarr, bool fill_hist) {
 	int y;
 	float scaling = 1.0 / 20.0;
 
@@ -264,8 +269,12 @@ void histogram(float *binarr) {
 	
 		if (y < 0) y = 0;
 
-		for (int aa = height - 1; aa >= y; --aa) {
-			led_canvas_set_pixel(canvas, x, aa, aa*7, 0, aa*7);
+		if (fill_hist == true) {
+			for (int aa = height - 1; aa >= y; --aa) {
+				led_canvas_set_pixel(canvas, x, aa, aa*7, 0, aa*7);
+			}
+		} else {
+			led_canvas_set_pixel(canvas, x, y, 0xff, 0, 0xff);
 		}
 
 	}
