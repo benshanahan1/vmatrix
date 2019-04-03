@@ -52,9 +52,9 @@ int main(int argc, char *argv[]) {
 	// Configure ALSA hardware parameters.
 	alsa_config_hw_params();
 
-	snd_pcm_hw_params_free (hw_params);
+	snd_pcm_hw_params_free(hw_params);
 
-	err = snd_pcm_prepare (capture_handle);
+	err = snd_pcm_prepare(capture_handle);
 	if (err < 0) {
 		fprintf(stderr, "cannot prepare audio interface (%s)\n",
 				snd_strerror(err));
@@ -111,13 +111,21 @@ int main(int argc, char *argv[]) {
 
 		/* Update matrix display. */
 		led_canvas_clear(canvas);
-		bins = bin_amplitudes(amplitudes);
-
-		bool show_envelope = true;
-		bool fill_hist = true;
-		histogram(bins, show_envelope, fill_hist);
-		//scrolling_spectrogram(bins);
-
+		switch (DISPLAY_MODE) {
+			case HISTOGRAM_W_ENVELOPE:
+				bins = bin_amplitudes(amplitudes, width, 1);
+				histogram(bins, true, true);
+				break;
+			case SCROLLING_SPECTROGRAM:
+				bins = bin_amplitudes(amplitudes, height, 2);
+				scrolling_spectrogram(bins);
+				break;
+			default:  // HISTOGRAM or unexpected value
+				bins = bin_amplitudes(amplitudes, width, 1);
+				histogram(bins, false, true);
+				break;
+		}
+		
 		/* Now, we swap the canvas. We give swap_on_vsync the buffer we
 		 * just have drawn into, and wait until the next vsync happens.
 		 * we get back the unused buffer to which we'll draw in the next
@@ -133,77 +141,44 @@ int main(int argc, char *argv[]) {
 
 
 /** Bin amplitudes from FFT. */
-float *bin_amplitudes(float *amplitudes) {
-	//double lower_edge = 0;
-
-	int size = width;
-	//int size = height;
-
+float *bin_amplitudes(float *amplitudes, int size, int bin_size) {
 	/* Allocate memory for binned amplitudes array. The `fmaxf` function
 	 * finds the maximum of two floats.
 	 */
 	float *binarr;
+	float scaling = 1.0 / (FS / 3.0);
+	
+	if (size < 0) {
+		printf("Size must be greater than 0.\n");
+		exit(1);
+	}
+
+	if (bin_size < 0) {
+		printf("Bin size must be greater than 0.\n");
+		exit(1);
+	}
+
+	if (size * bin_size > N) {
+		printf("Size * bin size cannot be greater than FFT size.\n");
+	}
+
 	if ((binarr = calloc(size, sizeof(float))) == NULL) {
 		printf("Error allocating memory for binned amplitude array.\n");
 		exit(1);
 	}
 
-	float scaling = 1.0 / (FS / 3.0);
-
+	/* First several amplitudes are too low too hear, so we offset the
+	 * amplitude indexing to skip them. */
 	for (int x = 0; x < size; ++x) {
-
-		// First several amplitudes are too low too hear, so we offset
-		// the amplitude indexing to skip them.
-		binarr[x] = amplitudes[x + 2] * scaling;
-
-		/*
-		double max_freq = (MAX_FREQ < MAX_FREQ_CAP) ?
-			MAX_FREQ : MAX_FREQ_CAP;
-
-		// Bin the FFT buffer logarithmically.	
-		//double upper_edge = logspace(MIN_FREQ, max_freq, x, size);
-		//double index_scaling = FREQ_RES;
-		//double scaling = 100;
-	
-		// Bin FFT linearly.
-		//double upper_edge = linspace(MIN_FREQ, max_freq, x, size);
-		//double index_scaling = FREQ_RES;
-		//double scaling = FS;
-	
-		// Bin FFT linearly (method 2).
-		//double upper_edge = 100 + 100 * x;
-		//double index_scaling = 12.67;
-		//double scaling = 10;	
-
-		for (int i = 0; i < N_NYQUIST; ++i) {
-			double f = (double) i * index_scaling;
-			if (f >= lower_edge && f <= upper_edge) {
-				binarr[x] += amplitudes[i] / scaling;
-			} else if (f > upper_edge) {
-				break;
-			}
-		}
-
-		lower_edge = upper_edge;
-		*/
+		int offset_idx = (x + 1) * bin_size;
+		float sum = 0;
+		for (int b = 0; b < bin_size; ++b)
+			sum += amplitudes[offset_idx + b] / (float) bin_size;
+		binarr[x] = sum * scaling;
 	}
 
-	// Return allocated pointer to binned amplitude values.
+	/* Return allocated pointer to binned amplitude values. */
 	return binarr;
-}
-
-
-/** Return bin edge in linear-space for given values. */
-double linspace(double min, double max, int i, int n) {
-	double diff = (max - min) / (double) n;
-	return min + (diff * (double) i);
-}
-
-
-/** Return bin edge in logarithmic-space for given values. */
-double logspace(double min, double max, int i, int n) {
-	double lin = linspace(log(min), log(max), i, n);
-	return exp(lin);
 }
 
 
@@ -222,8 +197,9 @@ void scrolling_spectrogram(float *binarr) {
 	for (int i = 0; i < d; ++i)
 		history[i] = binarr[i];
 
+	/* Amplitude boundaries (cap amplitude above and below these values). */
 	float s_min = 0.0;
-	float s_max = 350.0;
+	float s_max = 400.0;
 
 	/* Since history is a contiguous 1D array (but we're using it to store
 	 * 2D information) we can just incrementally step through it and we will
@@ -239,7 +215,7 @@ void scrolling_spectrogram(float *binarr) {
 			// Normalize bin value.
 			if (bin > s_max) bin = s_max;  // cap value of bin
 			float normalized = (bin - s_min) / (s_max - s_min);
-			float inverted = ((1.0 - normalized) / 0.25);
+			float inverted = ((1.0 - normalized) / 0.2);
 			int group = (int) inverted;
 			int scale = (int) (255 * (inverted - group));
 
@@ -247,15 +223,17 @@ void scrolling_spectrogram(float *binarr) {
 			int r = 0, g = 0, b = 0;
 			switch (group) {
 				case 0:
-					r = 255; b = scale; break;
+					r = 255; g = scale; b = 0; break;
 				case 1:
-					r = 255 - scale; b = 255; break;
+					r = 255 - scale; g = 255; b = 0; break;
 				case 2:
-					r = 0; b = 255; break;
+					r = 0; g = 255; b = scale; break;
 				case 3:
-					r = 0; b = 255 - scale; break;
+					r = 0; g = 255 - scale; b = 255; break;
 				case 4:
-					r = 0; b = 0; break;
+					r = 0; g = 0; b = 255 - scale; break;
+				case 5:
+					r = 0; g = 0; b = 0; break;
 			}
 
 			led_canvas_set_pixel(canvas, x, y, r, g, b);

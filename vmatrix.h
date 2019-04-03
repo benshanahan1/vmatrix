@@ -26,9 +26,17 @@
 #define MAX_FREQ_CAP 16000         // max freq. for visualization purposes
 
 
+/* Display modes. */
+enum {
+	HISTOGRAM,
+	HISTOGRAM_W_ENVELOPE,
+	SCROLLING_SPECTROGRAM
+} DisplayModes;
+#define DISPLAY_MODE SCROLLING_SPECTROGRAM
+
+
 /* Data structures. */
 typedef struct {
-	//int x;
 	int y;
 	int counter;  // keep track of # of iterations passed
 } PointHistory;
@@ -40,6 +48,6 @@ void clean_up();
 void alsa_config_hw_params();
 double linspace(double min, double max, int i, int n);
 double logspace(double min, double max, int i, int n);
-float *bin_amplitudes(float *amplitudes);
+float *bin_amplitudes(float *amplitudes, int size, int bin_size);
 void histogram(float *amplitudes, bool show_envelope, bool fill_hist);
 void scrolling_spectrogram(float *binarr);
