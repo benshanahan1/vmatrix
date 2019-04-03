@@ -101,11 +101,12 @@ int main(int argc, char *argv[]) {
 		/* Do FFT on buffered data. */
 		kiss_fftr(fftr_cfg, in, out);
 
-		/* Compute amplitude of frequency components. */
+		/* Compute amplitude of frequency components. Since FFT has
+		 * symmetric magnitude, we only need to take absolute value
+		 * of the real component to get the amplitude. */
 		float amplitudes[N_NYQUIST];
 		for (int k = 0; k < N_NYQUIST; ++k) {
-			float squared = out[k].r*out[k].r + out[k].i*out[k].i;
-			amplitudes[k] = sqrt(squared);
+			amplitudes[k] = abs(out[k].r);
 		}
 
 		/* Update matrix display. */
