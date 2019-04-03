@@ -113,8 +113,9 @@ int main(int argc, char *argv[]) {
 		led_canvas_clear(canvas);
 		bins = bin_amplitudes(amplitudes);
 
+		bool show_envelope = true;
 		bool fill_hist = true;
-		histogram(bins, fill_hist);
+		histogram(bins, show_envelope, fill_hist);
 		//scrolling_spectrogram(bins);
 
 		/* Now, we swap the canvas. We give swap_on_vsync the buffer we
@@ -224,12 +225,12 @@ void scrolling_spectrogram(float *binarr) {
 	float s_min = 0.0;
 	float s_max = 350.0;
 
-	// Since history is a contiguous 1D array (but we're using it to store
-	// 2D information) we can just incrementally step through it and we will
-	// retrieve the appropriate values for each column of the scrolling
-	// spectrogram matrix (we use the nested loops to get `x` and `y` for
-	// drawing to the canvas, but we use `ctr` to keep track of our index in
-	// `history` array).
+	/* Since history is a contiguous 1D array (but we're using it to store
+	 * 2D information) we can just incrementally step through it and we will
+	 * retrieve the appropriate values for each column of the scrolling
+	 * spectrogram matrix (we use the nested loops to get `x` and `y` for
+	 * drawing to the canvas, but we use `ctr` to keep track of our index in
+	 * `history` array). */
 	int ctr = 0;
 	for (int x = width - 1; x >= 0; --x) {
 		for (int y = height - 1; y >= 0; --y) {
@@ -268,7 +269,7 @@ void scrolling_spectrogram(float *binarr) {
  *
  * If `fill_hist` is true, fill each histogram bin vertically.
  */
-void histogram(float *binarr, bool fill_hist) {
+void histogram(float *binarr, bool show_envelope, bool fill_hist) {
 	int y;
 	float scaling = 1.0 / 20.0;
 
@@ -278,8 +279,11 @@ void histogram(float *binarr, bool fill_hist) {
 
 		if (y > 0) {
 			if (fill_hist == true) {
-				for (int aa = height; aa >= y; --aa) {
-					led_canvas_set_pixel(canvas, x, aa, aa, 0, aa*7);
+				for (int yy = height; yy >= y; --yy) {
+					int r = yy;
+					int g = 0;
+					int b = yy * 7;
+					led_canvas_set_pixel(canvas, x, yy, r, g, b);
 				}
 			} else {
 				led_canvas_set_pixel(canvas, x, y, 0xff, 0, 0xff);
@@ -296,12 +300,16 @@ void histogram(float *binarr, bool fill_hist) {
 	}
 
 	// Update envelope pixels on canvas.
-	for (int i = 0; i < width; ++i) {
-		//printf("%d (%d)\n", envelope[i].y, envelope[i].counter);
-		// Don't set the pixels if they are on the bottom row of the
-		// canvas (this makes things look bad).
-		if (envelope[i].y != height) {
-			led_canvas_set_pixel(canvas, i, envelope[i].y, 0xcc, 0, 0x66);
+	if (show_envelope) {
+		for (int i = 0; i < width; ++i) {
+			/* Don't set the pixels if they are on the bottom row of
+			 * the canvas (this makes things look bad). */
+			if (envelope[i].y != height) {
+				int r = 0xcc;
+				int g = 0;
+				int b = 0x66;
+				led_canvas_set_pixel(canvas, i, envelope[i].y, r, g, b);
+			}
 		}
 	}
 }
