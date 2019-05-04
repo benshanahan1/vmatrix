@@ -14,7 +14,8 @@
 #define MATRIX_ROWS 32       // matrix default row count
 #define MATRIX_COLS 64       // matrix default column count
 #define FS 44100             // Hz, audio sampling rate
-#define N 1600               // audio sample buffer size 
+#define FULL_N 3200          // audio sample buffer size, must be even 
+#define N FULL_N / 2         // actual size of de-interleaved buffer       
 #define ENVELOPE_CTR 1       // number of clicks envelope falls
 
 
@@ -32,7 +33,7 @@ enum {
 	HISTOGRAM_W_ENVELOPE,
 	SCROLLING_SPECTROGRAM
 } DisplayModes;
-#define DISPLAY_MODE SCROLLING_SPECTROGRAM
+#define DISPLAY_MODE HISTOGRAM_W_ENVELOPE
 
 
 /* Data structures. */

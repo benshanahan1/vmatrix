@@ -40,7 +40,9 @@ int main(int argc, char *argv[]) {
 
 	/* Configure ALSA for audio! */
 	int err;
-	short buf[N];
+	short buf[FULL_N];
+	short lbuf[N];  // left channel buffer
+	short rbuf[N];  // right channel buffer
 
 	err = snd_pcm_open(&capture_handle, device, SND_PCM_STREAM_CAPTURE, 0);
 	if (err < 0) {
@@ -91,12 +93,20 @@ int main(int argc, char *argv[]) {
 	for (;;) {
 		
 		// Read from sound card.
-		if ((err = snd_pcm_readi(capture_handle, buf, N)) != N) {
+		if ((err = snd_pcm_readi(capture_handle, buf, FULL_N)) != FULL_N) {
 			fprintf(stderr, "read from audio device failed (%s)\n",
 					snd_strerror(err));
 			exit(1);
 		}
-		for (int g = 0; g < N; ++g) in[g] = (kiss_fft_scalar) buf[g];
+
+		// De-interleave channels.
+		for (int h = 0; h < FULL_N; h += 2) {
+			rbuf[h] = buf[h];
+			lbuf[h] = buf[h + 1];
+		}
+
+		// For now, just use the right buffer as input.
+		for (int g = 0; g < N; ++g) in[g] = (kiss_fft_scalar) rbuf[g];
 
 		/* Do FFT on buffered data. */
 		kiss_fftr(fftr_cfg, in, out);
@@ -142,9 +152,6 @@ int main(int argc, char *argv[]) {
 
 /** Bin amplitudes from FFT. */
 float *bin_amplitudes(float *amplitudes, int size, int bin_size) {
-	/* Allocate memory for binned amplitudes array. The `fmaxf` function
-	 * finds the maximum of two floats.
-	 */
 	float *binarr;
 	float scaling = 1.0 / (FS / 3.0);
 	
@@ -340,7 +347,7 @@ void alsa_config_hw_params() {
 				snd_strerror(err));
 		exit(1);
 	}
-	
+
 	err = snd_pcm_hw_params_set_format(capture_handle, hw_params,
 			SND_PCM_FORMAT_S16_LE);
 	if (err < 0) {
