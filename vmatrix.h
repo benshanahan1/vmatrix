@@ -29,10 +29,11 @@
 /* Display modes. */
 enum {
 	HISTOGRAM,
+	HISTOGRAM_HOLLOW,
 	HISTOGRAM_W_ENVELOPE,
 	SCROLLING_SPECTROGRAM
 } DisplayModes;
-#define DISPLAY_MODE SCROLLING_SPECTROGRAM
+#define DISPLAY_MODE HISTOGRAM_HOLLOW
 
 
 /* Data structures. */
@@ -49,5 +50,5 @@ void alsa_config_hw_params();
 double linspace(double min, double max, int i, int n);
 double logspace(double min, double max, int i, int n);
 float *bin_amplitudes(float *amplitudes, int size, int bin_size);
-void histogram(float *amplitudes, bool show_envelope, bool fill_hist);
+void histogram(float *amplitudes, float old_weight, float new_weight, bool show_envelope, bool fill_hist, bool show_bottom_row);
 void scrolling_spectrogram(float *binarr);

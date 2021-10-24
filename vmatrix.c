@@ -17,6 +17,7 @@ kiss_fftr_cfg fftr_cfg;
 float *history;
 float *bins;
 PointHistory *envelope;
+PointHistory *histogram_values;
 
 
 int main(int argc, char *argv[]) {
@@ -82,6 +83,12 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 
+	/* Allocate array for storing histogram value history. */
+	if ((histogram_values = calloc(width, sizeof(PointHistory))) == NULL) {
+		printf("Error allocating memory for histogram_values array.\n");
+		exit(1);
+	}
+
 	if ((fftr_cfg = kiss_fftr_alloc(N, 0, NULL, NULL)) == NULL) {
 		printf("Error allocating memory for FFT.\n");
 		exit(1);
@@ -112,9 +119,13 @@ int main(int argc, char *argv[]) {
 		/* Update matrix display. */
 		led_canvas_clear(canvas);
 		switch (DISPLAY_MODE) {
+			case HISTOGRAM_HOLLOW:
+				bins = bin_amplitudes(amplitudes, width, 1);
+				histogram(bins, 0.5, 0.5, false, false, true);
+				break;
 			case HISTOGRAM_W_ENVELOPE:
 				bins = bin_amplitudes(amplitudes, width, 1);
-				histogram(bins, true, true);
+				histogram(bins, 0.35, 0.65, true, true, false);
 				break;
 			case SCROLLING_SPECTROGRAM:
 				bins = bin_amplitudes(amplitudes, height, 2);
@@ -122,7 +133,7 @@ int main(int argc, char *argv[]) {
 				break;
 			default:  // HISTOGRAM or unexpected value
 				bins = bin_amplitudes(amplitudes, width, 1);
-				histogram(bins, false, true);
+				histogram(bins, 0.5, 0.5, false, true, true);
 				break;
 		}
 		
@@ -247,7 +258,7 @@ void scrolling_spectrogram(float *binarr) {
  *
  * If `fill_hist` is true, fill each histogram bin vertically.
  */
-void histogram(float *binarr, bool show_envelope, bool fill_hist) {
+void histogram(float *binarr, float old_weight, float new_weight, bool show_envelope, bool fill_hist, bool show_bottom_row) {
 	int y;
 	float scaling = 1.0 / 20.0;
 
@@ -255,17 +266,23 @@ void histogram(float *binarr, bool show_envelope, bool fill_hist) {
 		y = (height) - (int) (binarr[x] * scaling);
 		if (y <= 0) y = 0;
 
-		if (y > 0) {
-			if (fill_hist == true) {
-				for (int yy = height; yy >= y; --yy) {
-					int r = yy;
-					int g = 0;
-					int b = yy * 7;
-					led_canvas_set_pixel(canvas, x, yy, r, g, b);
-				}
-			} else {
-				led_canvas_set_pixel(canvas, x, y, 0xff, 0, 0xff);
+		// Take weighted average of old and current histogram bin.
+		histogram_values[x].y = (int)((float)histogram_values[x].y * old_weight + (float)y * new_weight);
+
+		if (show_bottom_row == false) {
+			histogram_values[x].y += 1; // add one to offset the pixels so they don't show when there is no sound
+		}
+		
+		// Render the histogram
+		if (fill_hist == true) {
+			for (int yy = height; yy >= histogram_values[x].y; --yy) {
+				int r = yy;
+				int g = 0;
+				int b = yy * 7;
+				led_canvas_set_pixel(canvas, x, yy, r, g, b);
 			}
+		} else {
+			led_canvas_set_pixel(canvas, x, histogram_values[x].y, 0xff, 0, 0xff);
 		}
 
 		// Update amplitude envelope.
